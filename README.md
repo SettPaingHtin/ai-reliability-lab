@@ -1,66 +1,67 @@
-# AI Reliability Lab
+AI Reliability Lab
 
-Evaluate AI applications, track results per run, and (next milestones) catch regressions in CI.
-Milestone 1 is a working vertical slice: **project → dataset (JSONL) → run against a deterministic mock provider → persisted results → failure inspection in the UI.**
+A small tool for testing AI apps. You write a set of test cases, run them against a model, and see which ones pass, which fail, and why. It keeps every run in a database so results can be looked at later. Right now it only talks to a built-in mock model, so you don't need any API keys to try it.
 
-## Status — be precise about what works
-| Area | Status |
-|---|---|
-| Domain core (scoring, JSONL validation, mock provider, concurrent engine with retries/timeouts/rate limiting, metrics) | Implemented; **46 unit tests verified passing** |
-| FastAPI API, SQLAlchemy models, Alembic migration, API integration tests | Implemented; **not yet executed** (see below) |
-| Next.js UI (projects, datasets, import, run results, failure details; light/dark, responsive) | Implemented. Presentational components were rendered with real data and screenshotted in a browser (light, dark, mobile). **Page logic (fetching, forms, polling) and `next build` have not been run.** |
-| Run comparison, thresholds, CLI, Celery/Redis, real providers, AI grading, user auth, benchmarks, GitHub Actions PR-eval example | **Not started** (see `docs/architecture.md`) |
+Current status: 
 
-The environment this was written in had no network, Docker, Postgres, FastAPI, or pytest, so only the framework-free domain tests, a strict `tsc` check of `frontend/lib`, the formatter assertions, and a static render of the UI components were actually run. Component TypeScript was not type-checked (no `@types/react` available). Expect to fix small integration issues on first run and treat the API/UI layers as unverified until your own test run passes.
+You can create a project, create a dataset inside it, import test cases from a JSONL file, run the dataset against the mock model, and look at the results in the browser. Failed cases show the expected answer, the actual answer, and which scoring rule failed. Runs record pass rate, latency, token counts and an estimated cost. If a model doesn't report something, like token usage, it shows as a dash instead of a zero.
 
-## Quick start (Docker)
-```bash
-cp .env.example .env            # set POSTGRES_PASSWORD; set API_KEY (openssl rand -hex 32) for anything beyond local use
-docker compose up --build
-```
-UI: http://localhost:3000 · API docs (OpenAPI): http://localhost:8000/docs · Readiness: http://localhost:8000/health/ready
+Not yet implmented:
 
-Then: create a project → create a dataset → import `datasets/mock-qa-suite.jsonl` (44 cases; see `datasets/README.md`) → pick a model (**mock-1** baseline or **mock-2** candidate) → **Run evaluation** → open the run and expand failed cases.
+Comparing two runs, pass/fail thresholds, the command line tool, real model providers (OpenAI and the like), AI-assisted grading, user accounts, and the GitHub Actions setup. These are planned, in about that order.
 
-## Local development
-```bash
-# Backend (Python 3.12). Tests use SQLite, so they need no Postgres.
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-pytest                       # domain + API integration tests
-ruff check . && ruff format --check .
+Running it
 
-# Backend against Postgres
-export DATABASE_URL=postgresql+psycopg://arl:change-me-locally@localhost:5432/arl
-alembic upgrade head
-uvicorn app.main:create_app --factory --reload
+You need Docker. Then:
 
-# Frontend
-cd frontend
-npm install                  # then commit package-lock.json
-BACKEND_URL=http://localhost:8000 npm run dev
-npm run lint && npm run typecheck && npm test
-```
+    cp .env.example .env
 
-## Dataset format (JSONL, one object per line)
-```json
-{"input": "What is 2 + 2?", "expected": "4"}
-{"input": "Name a color", "rules": [{"type": "regex", "value": "red|blue", "case_sensitive": false}]}
-{"input": "Summarize…", "context": "…", "rules": [{"type": "contains", "value": "cat"}, {"type": "not_contains", "value": "dog"}]}
-```
-- Fields: `input` (required), `expected`, `context`, `rules`, `metadata`. Unknown fields are rejected.
-- Rule types: `exact` (defaults to `expected`), `contains`, `not_contains`, `regex`; options `case_sensitive` (default true), `strip` (default true).
-- A case passes only if **all** rules pass; score is the mean rule score. Import is all-or-nothing and reports every bad line.
-- Mock provider controls (in `metadata`): `mock_output`, `mock_latency_ms`, `mock_error` (`error|timeout|rate_limited|flaky:N`), `mock_report_usage: false`. The first three accept a per-model object (`{"mock-1": "Paris", "mock-2": "Lyon"}`) to simulate different models from one dataset.
+Open .env and set POSTGRES_PASSWORD to anything you like. Then:
 
-## Reliability semantics
-- Per-case outcomes are `passed`, `failed` (scored below bar), or `error` (provider/scoring failure after retries). Errors don't stop the run.
-- Retryable errors (timeout, rate limit, unavailable) back off exponentially up to `max_retries`; others fail immediately.
-- Metrics a provider doesn't report are `NULL` and shown as "—"; they are never coerced to 0. Mock-provider cost uses illustrative pricing, not real prices.
-- Run execution is claimed atomically, so submitting the same run twice does nothing; re-running a partially completed run resumes remaining cases.
+    docker compose up --build
 
-## Configuration
-See `.env.example`. Secrets come only from environment variables; the browser never sees the API key (the Next.js server proxies `/api/*`). **Auth is a single shared key — do not expose publicly until real auth ships.**
+When it finishes starting, open http://localhost:3000. The API docs are at http://localhost:8000/docs.
 
-More detail: [`docs/architecture.md`](docs/architecture.md).
+Trying it out
+
+Create a project, open it, create a dataset, and import datasets/mock-qa-suite.jsonl. Pick mock-1 from the model dropdown and click Run evaluation. You should end up with 36 passed, 5 failed and 3 errors out of 44. Running it again with mock-2 gives 34 passed, 8 failed and 2 errors. The two models are scripted to differ on purpose, so you have something to compare later.
+
+If you see everything failing, you are probably running an older copy of the code. Run "docker compose down -v", unpack a fresh copy, and rebuild with "docker compose build --no-cache".
+
+Dataset format
+
+One JSON object per line. Each needs an input, plus either an expected answer or a list of rules.
+
+    {"input": "What is 2 + 2?", "expected": "4"}
+    {"input": "Name a color", "rules": [{"type": "regex", "value": "red|blue", "case_sensitive": false}]}
+
+The rule types are exact, contains, not_contains and regex. A case passes only if every rule passes. You can also add context and metadata. If any line is invalid, nothing is imported and you get a list of the bad lines.
+
+The mock model reads its behavior from metadata: mock_output, mock_latency_ms, mock_error (error, timeout, rate_limited or flaky:N) and mock_report_usage. The first three can be given per model, like {"mock-1": "Paris", "mock-2": "Lyon"}. There is more detail in datasets/README.md.
+
+Running the tests
+
+    cd backend
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -e ".[dev]"
+    pytest
+
+For the frontend:
+
+    cd frontend
+    npm install
+    npm run typecheck
+    npm test
+
+How it is laid out:
+
+backend/app/domain holds the core logic (scoring, JSONL parsing, the mock model, the engine that runs cases). It doesn't depend on FastAPI or the database, which keeps it easy to test. backend/app/api and backend/app/services hold the web routes and the code that saves runs to Postgres. frontend is a Next.js app. docs/architecture.md explains the design choices in more detail.
+
+Things to note:
+
+There is no real login. If you set API_KEY in .env, the API requires it, but that is a single shared key and not user accounts, so don't put this on the public internet yet.
+
+Runs execute in a background task inside the API process. If the server restarts mid-run, that run is stuck. A proper job queue is planned.
+
+The domain tests have been run and pass. The API tests, the frontend lint and the production build were written but not run by me, so expect to fix a few small things if they fail on your machine.
