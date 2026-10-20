@@ -1,0 +1,6 @@
+{"input": "What is the capital of France?", "expected": "Paris", "metadata": {"mock_output": "Paris"}}
+{"input": "What is 2 + 2?", "expected": "4", "metadata": {"mock_output": "5"}}
+{"input": "Name a primary color.", "rules": [{"type": "regex", "value": "red|blue|yellow", "case_sensitive": false}], "metadata": {"mock_output": "Blue"}}
+{"input": "Summarize: The cat sat on the mat.", "context": "The cat sat on the mat.", "rules": [{"type": "contains", "value": "cat", "case_sensitive": false}, {"type": "not_contains", "value": "dog", "case_sensitive": false}], "metadata": {"mock_output": "A cat sat on a mat."}}
+{"input": "Provider that always errors", "expected": "n/a", "metadata": {"mock_error": "error"}}
+{"input": "Flaky provider (succeeds on 3rd attempt)", "expected": "ok", "metadata": {"mock_output": "ok", "mock_error": "flaky:2"}}
