@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ProjectGrid } from "@/components/run-view";
+import { EmptyState, SkeletonRows } from "@/components/ui";
 import { api, ApiError, postJson, type Page, type Project } from "@/lib/api";
 
 export default function ProjectsPage() {
@@ -39,27 +40,33 @@ export default function ProjectsPage() {
 
   return (
     <>
-      <h1>Projects</h1>
-      <p className="muted">Each project holds datasets and evaluation runs.</p>
-      <form onSubmit={create} className="row" aria-label="Create project">
-        <label htmlFor="pname" className="muted">Name</label>
-        <input id="pname" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} />
-        <button className="primary" disabled={busy || !name.trim()}>Create project</button>
-      </form>
-      {error && <div role="alert" className="alert">{error}</div>}
-      <h2>All projects</h2>
-      {projects === null && !error && <p className="muted">Loading…</p>}
-      {projects?.length === 0 && <div className="empty">No projects yet. Create one above to get started.</div>}
-      {projects && projects.length > 0 && (
-        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
-          {projects.map((p) => (
-            <Link key={p.id} href={`/projects/${p.id}`} className="card" style={{ textDecoration: "none", color: "inherit" }}>
-              <strong>{p.name}</strong>
-              <div className="muted">{p.description ?? "No description"}</div>
-            </Link>
-          ))}
+      <div className="page-head">
+        <div>
+          <h1>Projects</h1>
+          <p className="sub">Each project holds datasets and the evaluation runs made against them.</p>
         </div>
-      )}
+      </div>
+
+      <form onSubmit={create} className="card card-pad row" aria-label="Create project" style={{ alignItems: "flex-end" }}>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}>
+          <label htmlFor="pname">New project name</label>
+          <input id="pname" type="text" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} placeholder="e.g. support-bot" />
+        </div>
+        <button className="btn btn-primary" disabled={busy || !name.trim()}>Create project</button>
+      </form>
+
+      {error && <div role="alert" className="alert">{error}</div>}
+
+      <div className="section">
+        <div className="section-head">
+          <h2>All projects{projects ? ` (${projects.length})` : ""}</h2>
+        </div>
+        {projects === null && !error && <SkeletonRows />}
+        {projects?.length === 0 && (
+          <EmptyState title="No projects yet">Create your first project above to get started.</EmptyState>
+        )}
+        {projects && projects.length > 0 && <ProjectGrid projects={projects} />}
+      </div>
     </>
   );
 }

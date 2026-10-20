@@ -69,6 +69,9 @@ class MockProvider:
       mock_latency_ms    -> simulated latency (otherwise derived from a hash, 20-99 ms)
       mock_error         -> "error" | "timeout" | "rate_limited" | "flaky:N" (fail N attempts)
       mock_report_usage  -> false to simulate a provider that reports no token usage
+    mock_output, mock_latency_ms and mock_error may also be an object keyed by model name
+    (e.g. {"mock-1": "Paris", "mock-2": "Lyon"}) so one dataset can simulate different models.
+    A model missing from such an object gets the default behaviour.
     Pricing is illustrative only and is NOT real provider pricing.
     """
 
@@ -87,13 +90,19 @@ class MockProvider:
         self._attempts: dict[str, int] = {}
         self._lock = threading.Lock()
 
+    def _for_model(self, value: Any) -> Any:
+        """Resolve a per-model object ({"mock-1": ...}) to this model's value, else pass through."""
+        return value.get(self.model) if isinstance(value, dict) else value
+
     def generate(self, request: ProviderRequest, timeout_s: float) -> ProviderResponse:
         meta = request.metadata
         digest = hashlib.sha256(
             f"{self.model}\x00{request.prompt}\x00{request.context or ''}".encode()
         ).hexdigest()
-        latency_ms = _num(meta.get("mock_latency_ms"), 20 + int(digest[:4], 16) % 80, 0, 600_000)
-        mode = meta.get("mock_error")
+        latency_ms = _num(
+            self._for_model(meta.get("mock_latency_ms")), 20 + int(digest[:4], 16) % 80, 0, 600_000
+        )
+        mode = self._for_model(meta.get("mock_error"))
 
         if mode == "timeout" or latency_ms / 1000 > timeout_s:
             raise ProviderTimeout(f"simulated call exceeded {timeout_s}s timeout")
@@ -114,7 +123,7 @@ class MockProvider:
             if seen < failures:
                 raise ProviderUnavailable(f"simulated transient failure {seen + 1}/{failures}")
 
-        output = meta.get("mock_output")
+        output = self._for_model(meta.get("mock_output"))
         output = output[:20_000] if isinstance(output, str) else f"mock-response-{digest[:8]}"
         if meta.get("mock_report_usage", True) is False:
             return ProviderResponse(output)

@@ -6,12 +6,12 @@ Milestone 1 is a working vertical slice: **project → dataset (JSONL) → run a
 ## Status — be precise about what works
 | Area | Status |
 |---|---|
-| Domain core (scoring, JSONL validation, mock provider, concurrent engine with retries/timeouts/rate limiting, metrics) | Implemented; **45 unit tests verified passing** |
+| Domain core (scoring, JSONL validation, mock provider, concurrent engine with retries/timeouts/rate limiting, metrics) | Implemented; **46 unit tests verified passing** |
 | FastAPI API, SQLAlchemy models, Alembic migration, API integration tests | Implemented; **not yet executed** (see below) |
-| Next.js UI (projects, datasets, import, run results, failure details) | Implemented; **not yet built or run** |
+| Next.js UI (projects, datasets, import, run results, failure details; light/dark, responsive) | Implemented. Presentational components were rendered with real data and screenshotted in a browser (light, dark, mobile). **Page logic (fetching, forms, polling) and `next build` have not been run.** |
 | Run comparison, thresholds, CLI, Celery/Redis, real providers, AI grading, user auth, benchmarks, GitHub Actions PR-eval example | **Not started** (see `docs/architecture.md`) |
 
-The environment this was written in had no network, Docker, Postgres, FastAPI, or pytest, so only the framework-free domain tests, a strict `tsc` check of `frontend/lib`, and the formatter assertions were actually run. Expect to fix small integration issues on first run and treat the API/UI layers as unverified until your own test run passes.
+The environment this was written in had no network, Docker, Postgres, FastAPI, or pytest, so only the framework-free domain tests, a strict `tsc` check of `frontend/lib`, the formatter assertions, and a static render of the UI components were actually run. Component TypeScript was not type-checked (no `@types/react` available). Expect to fix small integration issues on first run and treat the API/UI layers as unverified until your own test run passes.
 
 ## Quick start (Docker)
 ```bash
@@ -20,7 +20,7 @@ docker compose up --build
 ```
 UI: http://localhost:3000 · API docs (OpenAPI): http://localhost:8000/docs · Readiness: http://localhost:8000/health/ready
 
-Then: create a project → create a dataset → import `datasets/sample.jsonl` → **Run evaluation (mock)** → open the run and expand failed cases.
+Then: create a project → create a dataset → import `datasets/mock-qa-suite.jsonl` (44 cases; see `datasets/README.md`) → pick a model (**mock-1** baseline or **mock-2** candidate) → **Run evaluation** → open the run and expand failed cases.
 
 ## Local development
 ```bash
@@ -52,7 +52,7 @@ npm run lint && npm run typecheck && npm test
 - Fields: `input` (required), `expected`, `context`, `rules`, `metadata`. Unknown fields are rejected.
 - Rule types: `exact` (defaults to `expected`), `contains`, `not_contains`, `regex`; options `case_sensitive` (default true), `strip` (default true).
 - A case passes only if **all** rules pass; score is the mean rule score. Import is all-or-nothing and reports every bad line.
-- Mock provider controls (in `metadata`): `mock_output`, `mock_latency_ms`, `mock_error` (`error|timeout|rate_limited|flaky:N`), `mock_report_usage: false`.
+- Mock provider controls (in `metadata`): `mock_output`, `mock_latency_ms`, `mock_error` (`error|timeout|rate_limited|flaky:N`), `mock_report_usage: false`. The first three accept a per-model object (`{"mock-1": "Paris", "mock-2": "Lyon"}`) to simulate different models from one dataset.
 
 ## Reliability semantics
 - Per-case outcomes are `passed`, `failed` (scored below bar), or `error` (provider/scoring failure after retries). Errors don't stop the run.

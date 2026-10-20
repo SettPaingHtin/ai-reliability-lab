@@ -38,6 +38,8 @@ export interface Run {
   total_cost_usd: number | null;
   error_message: string | null;
   created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 }
 export type ResultStatus = "passed" | "failed" | "error";
 export interface RuleResult {

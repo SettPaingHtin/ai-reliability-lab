@@ -67,3 +67,20 @@ def test_registry():
     assert "mock" in provider_names()
     assert build_provider("mock", "m").model == "m"
     assert _raises(ValueError, build_provider, "nope", "m")
+
+
+def test_per_model_outputs_latency_and_errors():
+    meta = {
+        "mock_output": {"mock-1": "Paris", "mock-2": "Lyon"},
+        "mock_latency_ms": {"mock-1": 10, "mock-2": 5000},
+        "mock_error": {"mock-2": "error"},
+    }
+    one = MockProvider(model="mock-1").generate(ProviderRequest("q", metadata=meta), 30)
+    assert one.output == "Paris"
+    assert _raises(ProviderError, MockProvider(model="mock-2").generate, ProviderRequest("q", metadata=meta), 30)
+    # a model absent from the object falls back to default behaviour
+    other = MockProvider(model="mock-3").generate(ProviderRequest("q", metadata=meta), 30)
+    assert other.output.startswith("mock-response-")
+    slept = []
+    MockProvider(model="mock-1", simulate_latency=True, sleep=slept.append).generate(ProviderRequest("q", metadata=meta), 30)
+    assert slept == [0.01]
